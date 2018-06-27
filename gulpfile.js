@@ -6,13 +6,16 @@ const tap = require('gulp-tap');
 const clean = require('gulp-clean');
 const babel = require('gulp-babel');
 const path = require('path');
+const webpack = require('webpack');
+const fs = require('fs');
+const webpackStream = require('webpack-stream');
 
 const config = require('./build/config');
 
 const hasRmCssFiles = new Set();
 
 
-// TODO sprity
+// TODO sprity、js、remove、环境配置（dev,prod,sourcemap等）
 
 const getAssetsExt = () => {
     const extsLow = config.assetsExt.concat(['json', 'wxml', 'wxs']);
@@ -21,13 +24,56 @@ const getAssetsExt = () => {
     return exts.join(',');
 };
 
+const getEntries = (dir) => {
+    let files = [];
+    const src = path.resolve(dir);
+    const srcFile = fs.readdirSync(src);
+    srcFile.forEach((item) => {
+        const filePath = path.resolve(dir, item);
+        const isDir = fs.lstatSync(filePath).isDirectory();
+        if (/\.js$/.test(item)) {
+            files.push(filePath);
+        } else if (isDir) {
+            files = files.concat(getEntries(filePath));
+        }
+    });
+    return files;
+};
+
 gulp.task('js', () => {
-    gulp.src('./src/**/*.js')
+    const mode = config.jsCompileMode;
+    if (mode === 'webpack') {
+        const srcPath = path.resolve('./src');
+        const entries = getEntries(srcPath);
+        const entriesObj = {};
+        entries.forEach((entry) => {
+            const entryPath = entry.replace(`${srcPath}/`, '');
+            entriesObj[entryPath] = entry;
+        });
+        return gulp.src([])
+            .pipe(webpackStream({
+                entry: entriesObj,
+                output: {
+                    filename: '[name]',
+                },
+                module: {
+                    loaders: [{
+                        test: /\.js$/,
+                        exclude: /node_modules/,
+                        loader: 'babel-loader',
+                    }],
+                },
+            }))
+            .pipe(gulp.dest('./dist'));
+    }
+    return gulp.src('./src/**/*.js')
         .pipe(babel({
-            presets: ['env'],
+            babelrc: false,
+            presets: ['es2015', 'stage-0'],
         }))
         .pipe(gulp.dest('./dist'));
 });
+
 
 gulp.task('sass', () => gulp.src('./src/**/*.{scss,wxss}')
     .pipe(tap((file) => {
@@ -69,14 +115,14 @@ gulp.task('clean:wxss', ['sass'], () => {
     hasRmCssFiles.forEach((item) => {
         arr.push(item);
     });
-    gulp.src(arr, { read: false })
+    return gulp.src(arr, { read: false })
         .pipe(clean({ force: true }));
 });
 
 // 做成可配置的后缀
 gulp.task('assets', () => {
     const exts = getAssetsExt();
-    gulp.src(`./src/**/*.{${exts}}`).pipe(gulp.dest('./dist'));
+    return gulp.src(`./src/**/*.{${exts}}`).pipe(gulp.dest('./dist'));
 });
 
 gulp.task('watch', () => {
