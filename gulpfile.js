@@ -5,6 +5,7 @@ const rename = require('gulp-rename');
 const tap = require('gulp-tap');
 const clean = require('gulp-clean');
 const babel = require('gulp-babel');
+const gulpSequence = require('gulp-sequence');
 const path = require('path');
 const webpack = require('webpack');
 const fs = require('fs');
@@ -109,13 +110,19 @@ gulp.task('sass', () => gulp.src('./src/**/*.{scss,wxss}')
     }))
     .pipe(gulp.dest('./dist')));
 
-// sass执行完成后，删除在config中配置的css文件
-gulp.task('clean:wxss', ['sass'], () => {
+gulp.task('clean:wxss', () => {
     const arr = [];
     hasRmCssFiles.forEach((item) => {
         arr.push(item);
     });
     return gulp.src(arr, { read: false })
+        .pipe(clean({ force: true }));
+});
+
+// 清除目录
+gulp.task('clean', () => {
+    const distPath = path.resolve('./dist');
+    return gulp.src(distPath, { read: false })
         .pipe(clean({ force: true }));
 });
 
@@ -132,4 +139,4 @@ gulp.task('watch', () => {
     gulp.watch(`./src/**/*.{${exts}}`, ['assets']);
 });
 
-gulp.task('default', ['assets', 'js', 'sass', 'clean:wxss']);
+gulp.task('default', gulpSequence(['clean'], ['assets', 'js', 'sass'], ['clean:wxss']));
